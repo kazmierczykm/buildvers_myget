@@ -1,12 +1,12 @@
 @echo Off
 set config=%1
 if "%config%" == "" (
-   set config=Debug
+    set config=Release
 )
 
 set version=
-if not "%PackageVersion%" == "" (
-   set version=-Version %PackageVersion%
+if not "%BuildCounter%" == "" (
+   set packversionsuffix=--version-suffix ci-%BuildCounter%
 )
 
 REM Detect MSBuild 15.0 path
@@ -25,9 +25,25 @@ REM %msbuild%
 
 REM (optional) build.bat is in the root of our repo, cd to the correct folder where sources/projects are
 
-REM Package
-mkdir Build
-call %nuget% pack "ProjectVersions\ProjectVersions.csproj" -symbols -o Build -p Configuration=%config% %version%
+
+REM Restore
+call dotnet restore
+if not "%errorlevel%"=="0" goto failure
+
+REM Build
+:call "%msbuild%" MSTestMoqExample.sln /p:Configuration="%config%" /m /v:M /fl /flp:LogFile=msbuild.log;Verbosity=Normal /nr:false
+call dotnet build --configuration %config%
+if not "%errorlevel%"=="0" goto failure
 
 
+cd ..
+:REM Package
+mkdir %cd%\..\artifacts
+call dotnet pack PrimeService --include-symbols --configuration %config% %packversionsuffix% --output %cd%\..\artifacts
+if not "%errorlevel%"=="0" goto failure
 
+:success
+exit 0
+
+:failure
+exit -1
